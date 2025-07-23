@@ -78,7 +78,7 @@ class ReceivablePayableReport:
 		self.get_chart_data()
 
 		self.remove_paid_invoice()
-
+ 
 		return self.columns, self.data, None, self.chart, None, self.skip_total_row
 
 	def set_defaults(self):
