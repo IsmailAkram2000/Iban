@@ -83,7 +83,7 @@ frappe.query_reports["Custom Accounts Receivable2"] = {
 				return {
 					filters: {
 						company: company,
-						account_type: ["Receivable"],
+						account_type: ["=", "Receivable"],
 						is_group: 0,
 					},
 				};

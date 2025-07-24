@@ -44,7 +44,7 @@ def get_data(filters):
             if not paid_amount:
                 continue
 
-            if filters.get('customer_group') and filters.get('customer_group') != customer_group:
+            if filters.get('party_type') == 'Customer' and filters.get('customer_group') and customer_group not in filters.get('customer_group'):
                 continue
 
             payment_type = payment_details[0].get('payment_type', 0)
@@ -107,7 +107,7 @@ def get_data(filters):
             pos_profile = sales_invoice[0].get('pos_profile')
             sales_person = sales_invoice[0].get('sales_person')
 
-            if filters.get('customer_group') and filters.get('customer_group') != customer_group:
+            if filters.get('party_type') == 'Customer' and filters.get('customer_group') and customer_group not in filters.get('customer_group'):
                 continue
             if filters.get('pos_profile') and filters.get('pos_profile') != pos_profile:
                 continue
@@ -152,7 +152,7 @@ def get_data(filters):
             party = journal_details[0].get('party')
 
             customer_group = frappe.get_value('Customer', party, 'customer_group')
-            if filters.get('customer_group') and filters.get('customer_group') != customer_group:
+            if filters.get('party_type') == 'Customer' and filters.get('customer_group') and customer_group not in filters.get('customer_group'):
                 continue
 
             data.append({
@@ -187,7 +187,8 @@ def get_gl_entries(filters):
     if filters.get('party_type'):
         con += f" AND gl.party_type = '{filters.get('party_type')}'"
     if filters.get('party'):
-        con += f" AND gl.party = '{filters.get('party')}'"
+        parties = "', '".join(filters.get('party'))
+        con += f" AND gl.party IN ('{parties}')"
     if filters.get('party_account'):
         con += f" AND gl.account = '{filters.get('account')}'"
     if filters.get('sales_person') or filters.get('pos_profile'):
