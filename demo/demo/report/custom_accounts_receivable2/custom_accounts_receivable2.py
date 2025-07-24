@@ -135,14 +135,15 @@ def get_data(filters):
         else:
             journal_details = frappe.db.sql("""
                 SELECT 
-                    debit_in_account_currency AS debit,
-                    credit_in_account_currency AS credit,
+                    SUM(debit_in_account_currency) AS debit,
+                    SUM(credit_in_account_currency) AS credit,
                     party_type,
                     party
                 FROM `tabJournal Entry Account` jea
                 WHERE
                     jea.parent = %s
                     AND jea.account = %s
+                GROUP BY jea.account
             """, (voucher_no, entry.get('account')), as_dict=True)
             if not journal_details:
                 continue
