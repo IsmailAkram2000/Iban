@@ -71,8 +71,8 @@ def get_data(filters):
             sales_invoice = frappe.db.sql("""
                 SELECT 
                     si.grand_total,
-                    # si.pos_profile,
-                    # si.sales_person,
+                    si.pos_profile,
+                    si.sales_person,
                     si.due_date,
                     CASE 
                         WHEN si.status = 'Paid' THEN 0
@@ -104,15 +104,15 @@ def get_data(filters):
                 continue
 
             customer_group = sales_invoice[0].get('customer_group')
-            # pos_profile = sales_invoice[0].get('pos_profile')
-            # sales_person = sales_invoice[0].get('sales_person')
+            pos_profile = sales_invoice[0].get('pos_profile')
+            sales_person = sales_invoice[0].get('sales_person')
 
             if filters.get('customer_group') and filters.get('customer_group') != customer_group:
                 continue
-            # if filters.get('pos_profile') and filters.get('pos_profile') != pos_profile:
-            #     continue
-            # if filters.get('sales_person') and filters.get('sales_person') != sales_person:
-            #     continue
+            if filters.get('pos_profile') and filters.get('pos_profile') != pos_profile:
+                continue
+            if filters.get('sales_person') and filters.get('sales_person') != sales_person:
+                continue
 
             data.append({
                 "posting_date": entry.get('posting_date'),
