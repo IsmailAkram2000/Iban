@@ -2,6 +2,9 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _dict
+
+from erpnext.accounts.report.general_ledger.general_ledger import execute as general_ledger
 
 def execute(filters=None):
     columns = get_columns() 
@@ -12,7 +15,8 @@ def execute(filters=None):
 def get_data(filters):
     entries = get_gl_entries(filters)
 
-    data = []
+    data = get_opening_balance(filters)
+
     voucher_no_dict = {}
 
     for entry in entries:    
@@ -145,6 +149,7 @@ def get_data(filters):
                     AND jea.account = %s
                 GROUP BY jea.account
             """, (voucher_no, entry.get('account')), as_dict=True)
+
             if not journal_details:
                 continue
 
@@ -173,6 +178,27 @@ def get_data(filters):
             })
 
     return data
+
+def get_opening_balance(filters):
+    general_ledger_filters = _dict({
+        'company': filters.get('company'),
+        'from_date': filters.get('from_date'), 
+        'to_date': '2025-07-24', 
+        'account': filters.get('party_account'), 
+        'party_type': filters.get('party_type'),
+        'party': filters.get('party'), 
+        'categorize_by': 'Categorize by Voucher (Consolidated)', 
+        'include_dimensions': 1, 
+        'include_default_book_entries': 1
+    })
+
+    columns, data = general_ledger(general_ledger_filters)
+
+    for row in data:
+        if row.get('account') in ["'Opening'", "'افتتاحي'"]:
+            return [{"account": 'Opening', "outstanding_amount": row.get('balance', 0) or 0}] 
+
+    return []
 
 def get_gl_entries(filters):
     con = ''
