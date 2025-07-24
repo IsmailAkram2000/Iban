@@ -98,6 +98,7 @@ def get_data(filters):
                 WHERE 
                     si.name = %s
                     AND si.docstatus = 1
+                    AND is_return = 0
             """, (voucher_no,), as_dict=True)
 
             if not sales_invoice:
