@@ -26,6 +26,20 @@ frappe.query_reports["Custom Accounts Receivable2"] = {
 			reqd: 1,
 		},
 		{
+			fieldname: "ageing_based_on",
+			label: __("Ageing Based On"),
+			fieldtype: "Select",
+			options: ['Posting Date', 'Due Date'],
+			default: "Due Date",
+			reqd: 1,
+		},
+		{
+			fieldname: "range",
+			label: __("Ageing Range"),
+			fieldtype: "Data",
+			default: "30, 60, 90, 120",
+		},
+		{
 			fieldname: "voucher_type",
 			label: __("Voucher Type"),
 			fieldtype: "Link",

@@ -3,11 +3,12 @@
 
 import frappe
 from frappe import _dict
+from frappe.utils import getdate, nowdate
 
 from erpnext.accounts.report.general_ledger.general_ledger import execute as general_ledger
 
 def execute(filters=None):
-    columns = get_columns() 
+    columns = get_columns(filters) 
     data = get_data(filters)
 
     return columns, data
@@ -72,6 +73,9 @@ def get_data(filters):
                     
         # 🧾 Handle sales invoice
         elif entry['voucher_type'] == 'Sales Invoice':
+            from_date = filters.get('from_date')
+            to_date = filters.get('to_date')
+
             sales_invoice = frappe.db.sql("""
                 SELECT 
                     si.grand_total,
@@ -95,15 +99,26 @@ def get_data(filters):
                             ret_si.docstatus = 1 
                             AND ret_si.is_return = 1 
                             AND ret_si.return_against = si.name
+                            AND ret_si.posting_date BETWEEN %s AND %s
                     ) AS credit_note,
+                    (
+                        SELECT 
+                            SUM(ret_si.grand_total - ret_si.outstanding_amount)
+                        FROM `tabSales Invoice` ret_si
+                        WHERE 
+                            ret_si.docstatus = 1 
+                            AND ret_si.is_return = 1 
+                            AND ret_si.return_against = si.name
+                            AND ret_si.posting_date BETWEEN %s AND %s
+                    ) AS paid_credit_note,
                     c.customer_group
                 FROM `tabSales Invoice` si
                 JOIN `tabCustomer` c ON c.name = si.customer
                 WHERE 
                     si.name = %s
                     AND si.docstatus = 1
-                    AND is_return = 0
-            """, (voucher_no,), as_dict=True)
+                    AND si.outstanding_amount != 0
+            """, (from_date, to_date, from_date, to_date, voucher_no,), as_dict=True)
 
             if not sales_invoice:
                 continue
@@ -119,6 +134,12 @@ def get_data(filters):
             if filters.get('sales_person') and filters.get('sales_person') != sales_person:
                 continue
 
+            invoiced_amount = sales_invoice[0].get('grand_total')
+            paid_amount = sales_invoice[0].get('paid_amount')
+            outstanding_amount = sales_invoice[0].get('outstanding_amount', 0) or 0
+            paid_credit_note = sales_invoice[0].get('paid_credit_note', 0) or 0
+            credit_note = sales_invoice[0].get('credit_note', 0) or 0
+
             data.append({
                 "posting_date": entry.get('posting_date'),
                 "due_date": sales_invoice[0].get('due_date'),
@@ -127,10 +148,11 @@ def get_data(filters):
                 "account": entry.get('account'),
                 "voucher_type": entry.get('voucher_type'),
                 "voucher_no": entry.get('voucher_no'),
-                "invoiced_amount": sales_invoice[0].get('grand_total'),
-                "paid_amount": sales_invoice[0].get('paid_amount'),
-                "outstanding_amount": sales_invoice[0].get('outstanding_amount'),
+                "invoiced_amount": invoiced_amount,
+                "paid_amount": paid_amount,
+                "outstanding_amount": outstanding_amount,
                 "credit_note": sales_invoice[0].get('credit_note') or 0,
+                "paid_credit_note": sales_invoice[0].get('paid_credit_note') or 0,
                 "currency": entry.get('currency'),
                 'customer_group': customer_group,
             })
@@ -176,6 +198,8 @@ def get_data(filters):
                 "currency": entry.get('currency'),
                 'customer_group': customer_group,
             })
+
+    calculate_ageing_periods(data, filters)
 
     return data
 
@@ -243,91 +267,101 @@ def get_gl_entries(filters):
 
     return entries
 
-def get_columns():
+def calculate_ageing_periods(data, filters):
+    report_date = nowdate()
+    ageing_based_on = filters.get("ageing_based_on", "Due Date")
+
+    # Get ageing buckets
+    ageing_ranges = get_ageing_ranges(filters)
+    ageing_ranges = sorted(ageing_ranges)
+    bucket_count = len(ageing_ranges)
+
+    for row in data:
+        base_date_str = row.get("due_date") if ageing_based_on == "Due Date" and row.get('voucher_type') == 'Sales Invoice' else row.get("posting_date")
+        base_date = getdate(base_date_str) if base_date_str else None
+        
+        age = (getdate(nowdate()) - getdate(base_date)).days if base_date else 0
+        row["age"] = age
+
+        # Reset ageing buckets
+        for i in range(bucket_count + 1):
+            row[f"range_{i}"] = 0.0
+
+        amount = row.get("outstanding_amount", 0.0)
+
+        # Assign to correct bucket
+        last_range = -1
+        for i, current_range in enumerate(ageing_ranges):
+            if age <= current_range:
+                row[f"range_{i}"] += amount
+                break
+            last_range = current_range
+        else:
+            # Age is greater than last range
+            row[f"range_{bucket_count}"] += amount
+
+def get_columns(filters):
+    ranges = get_ageing_ranges(filters)
+
     columns = [
-        {
-            "label": "Posting Date",
-            "fieldname": "posting_date",
-            "fieldtype": "Date",
-            "width": 150,
-        },
-        {
-            "label": "Party Type",
-            "fieldname": "party_type",
-            "fieldtype": "Data",
-            "width": 150,
-        },
-        {
-            "label": "Party",
-            "fieldname": "party",
-            "fieldtype": "Dynamic Link",
-            "options": "party_type",
-            "width": 180,
-        },
-        {
-            "label": "Receivable Account",
-            "fieldname": "account",
-            "fieldtype": "Link",
-            "options": "Account",
-            "width": 180,
-        },
-        {
-            "label": "Voucher Type",
-            "fieldname": "voucher_type",
-            "fieldtype": "Data",
-            "width": 180,
-        },
-        {
-            "label": "Voucher No",
-            "fieldname": "voucher_no",
-            "fieldtype": "Dynamic Link",
-            "options": "voucher_type",
-            "width": 180,
-        },
-        {
-            "label": "Due Date",
-            "fieldname": "due_date",
-            "fieldtype": "Date",
-            "width": 150,
-        },
-        {
-            "label": "Invoiced Amount",
-            "fieldname": "invoiced_amount",
+        {"label": "Posting Date", "fieldname": "posting_date", "fieldtype": "Date", "width": 150},
+        {"label": "Party Type", "fieldname": "party_type", "fieldtype": "Data", "width": 150},
+        {"label": "Party", "fieldname": "party", "fieldtype": "Dynamic Link", "options": "party_type", "width": 180},
+        {"label": "Receivable Account", "fieldname": "account", "fieldtype": "Link", "options": "Account", "width": 180},
+        {"label": "Voucher Type", "fieldname": "voucher_type", "fieldtype": "Data", "width": 180},
+        {"label": "Voucher No", "fieldname": "voucher_no", "fieldtype": "Dynamic Link", "options": "voucher_type", "width": 180},
+        {"label": "Due Date", "fieldname": "due_date", "fieldtype": "Date", "width": 150},
+        {"label": "Invoiced Amount", "fieldname": "invoiced_amount", "fieldtype": "Currency", "width": 150},
+        {"label": "Paid Amount", "fieldname": "paid_amount", "fieldtype": "Currency", "width": 150},
+        {"label": "Credit Note", "fieldname": "credit_note", "fieldtype": "Currency", "width": 120},
+        {"label": "Paid Credit Note", "fieldname": "paid_credit_note", "fieldtype": "Currency", "width": 120},
+        {"label": "Outstanding Amount", "fieldname": "outstanding_amount", "fieldtype": "Currency", "width": 150},
+        {"label": "Age (Days)", "fieldname": "age", "fieldtype": "Int", "width": 120},
+    ]
+
+    # Add ageing columns dynamically
+    last_range = -1
+    for idx, age in enumerate(ranges):
+        label = f"{last_range + 1}-{age}"
+        columns.append({
+            "label": f"{label}",
+            "fieldname": f"range_{idx}",
             "fieldtype": "Currency",
-            "width": 150,
-        },
-        {
-            "label": "Paid Amount",
-            "fieldname": "paid_amount",
-            "fieldtype": "Currency",
-            "width": 150,
-        },
-        {
-            "label": "Credit Note",
-            "fieldname": "credit_note",
-            "fieldtype": "Currency",
-            "width": 150,
-        },
-        {
-            "label": "Outstanding Amount",
-            "fieldname": "outstanding_amount",
-            "fieldtype": "Currency",
-            "width": 150,
-        },
-        {
-            "label": "Currency",
-            "fieldname": "currency",
-            "fieldtype": "Link",
-            "options": "Currency",
-            "width": 120,
-        },
-        {
-            "label": "Customer Group",
-            "fieldname": "customer_group",
-            "fieldtype": "Link",
-            "options": "Customer Group",
-            "width": 150,
-        },
+            "width": 120
+        })
+        last_range = age
+
+    # Add final "Above" range column
+    columns.append({
+        "label": f"{last_range}-Above",
+        "fieldname": f"range_{len(ranges)}",
+        "fieldtype": "Currency",
+        "width": 120
+    })
+
+    # Remaining columns
+    columns += [
+        {"label": "Currency", "fieldname": "currency", "fieldtype": "Link", "options": "Currency", "width": 120},
+        {"label": "Customer Group", "fieldname": "customer_group", "fieldtype": "Link", "options": "Customer Group", "width": 150},
     ]
 
     return columns
+
+def get_ageing_ranges(filters):
+    default_range = [30, 60, 90, 120]
+    raw = filters.get("range", "")
+    
+    try:
+        ranges = [int(r.strip()) for r in raw.split(",")]
+    except ValueError:
+        frappe.msgprint("Invalid ageing range format. Using default: 30, 60, 90, 120.")
+        return default_range
+
+    if len(ranges) != len(set(ranges)):
+        frappe.msgprint("Duplicate values found in ageing range. Using default: 30, 60, 90, 120.")
+        return default_range
+
+    if ranges != sorted(ranges):
+        return sorted(ranges)
+
+    return ranges
