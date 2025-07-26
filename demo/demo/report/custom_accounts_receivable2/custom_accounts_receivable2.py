@@ -117,10 +117,11 @@ def get_data(filters):
                 WHERE 
                     si.name = %s
                     AND si.docstatus = 1
-                    AND si.outstanding_amount != 0
+                    AND si.outstanding_amount > 0
+                    AND si.status != 'Paid'
             """, (from_date, to_date, from_date, to_date, voucher_no,), as_dict=True)
 
-            if not sales_invoice:
+            if not sales_invoice or float(sales_invoice[0].get('outstanding_amount')) == 0.0:
                 continue
 
             customer_group = sales_invoice[0].get('customer_group')
