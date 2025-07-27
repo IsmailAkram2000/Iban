@@ -111,7 +111,6 @@ frappe.query_reports["Custom Accounts Receivable"] = {
 			get_data: function (txt) {
 				return frappe.db.get_link_options("Customer Group", txt);
 			},
-			depends_on: "eval:doc.party_type === 'Customer'"
 		},
 		{
 			fieldname: "group_by_customer",

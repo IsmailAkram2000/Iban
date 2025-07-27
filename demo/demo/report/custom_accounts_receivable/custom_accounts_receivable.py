@@ -16,9 +16,6 @@ def execute(filters=None):
 def get_data(filters):
     general_ledger_data = get_general_ledger_data(filters)
 
-    for row in general_ledger_data:
-        frappe.msgprint(str(row))
-
     data = []
 
     for row in general_ledger_data:
