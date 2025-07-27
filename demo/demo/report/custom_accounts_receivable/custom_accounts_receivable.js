@@ -113,6 +113,15 @@ frappe.query_reports["Custom Accounts Receivable"] = {
 			},
 		},
 		{
+			fieldname: "sales_person",
+			label: __("Sales Person"),
+			fieldtype: "MultiSelectList",
+			options: "Sales Person",
+			get_data: function (txt) {
+				return frappe.db.get_link_options("Sales Person", txt);
+			},
+		},
+		{
 			fieldname: "group_by_customer",
 			label: __("Group By Customer"),
 			fieldtype: "Check",

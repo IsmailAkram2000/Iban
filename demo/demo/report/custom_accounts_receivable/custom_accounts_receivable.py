@@ -56,6 +56,8 @@ def get_data(filters):
 
     calculate_ageing_periods(data, filters)
 
+    data = add_and_filter_data_by_sales_person(data, filters)
+
     if filters.get('group_by_customer'):
         data = group_data_by_customer(data)
 
@@ -140,6 +142,39 @@ def calculate_ageing_periods(data, filters):
         else:
             # Age is greater than last range
             row[f"range_{bucket_count}"] += amount
+
+def add_and_filter_data_by_sales_person(data, filters):
+    sales_persons = filters.get('sales_person')
+
+    filtered_data = []
+    for row in data:
+        voucher_type = row.get('voucher_type')
+        voucher_no = row.get('voucher_no')
+
+        sales_person = None
+        if voucher_type == 'Sales Invoice':
+            sales_person = frappe.get_value('Sales Invoice', voucher_no, 'sales_person')
+        if voucher_type == 'Payment Entry':
+            sales_person = frappe.get_value('Payment Entry', voucher_no, 'sales_person')
+        if voucher_type == 'Journal Entry':
+            je_sales_persons = frappe.db.sql("""
+                SELECT sales_person
+                FROM `tabJournal Entry Account`
+                WHERE parent = %s
+            """, (voucher_no), as_dict=True)
+            for je_sales_person in je_sales_persons:
+                if je_sales_person.get('sales_person'):
+                    sales_person = je_sales_person.get('sales_person')
+                    break
+
+        row['sales_person'] = sales_person
+            
+        if sales_persons and len(sales_persons) and sales_person not in sales_persons:
+            continue
+
+        filtered_data.append(row)
+
+    return filtered_data
 
 def group_data_by_customer(data): 
     grouped_data = []
@@ -243,6 +278,7 @@ def get_columns(filters):
         {"label": "Posting Date", "fieldname": "posting_date", "fieldtype": "Date", "width": 150},
         {"label": "Party Type", "fieldname": "party_type", "fieldtype": "Data", "width": 150},
         {"label": "Party", "fieldname": "party", "fieldtype": "Dynamic Link", "options": "party_type", "width": 180},
+        {"label": "Sales Person", "fieldname": "sales_person", "fieldtype": "Link", "options": "Sales Person", "width": 180},
         {"label": "Receivable Account", "fieldname": "account", "fieldtype": "Link", "options": "Account", "width": 180},
         {"label": "Voucher Type", "fieldname": "voucher_type", "fieldtype": "Data", "width": 180},
         {"label": "Voucher No", "fieldname": "voucher_no", "fieldtype": "Dynamic Link", "options": "voucher_type", "width": 180},
@@ -250,7 +286,6 @@ def get_columns(filters):
         {"label": "Invoiced Amount", "fieldname": "invoiced_amount", "fieldtype": "Currency", "width": 150},
         {"label": "Paid Amount", "fieldname": "paid_amount", "fieldtype": "Currency", "width": 150},
         {"label": "Credit Note", "fieldname": "credit_note", "fieldtype": "Currency", "width": 120},
-        # {"label": "Paid Credit Note", "fieldname": "paid_credit_note", "fieldtype": "Currency", "width": 120},
         {"label": "Outstanding Amount", "fieldname": "outstanding_amount", "fieldtype": "Currency", "width": 150},
         {"label": "Age (Days)", "fieldname": "age", "fieldtype": "Int", "width": 120},
     ]
