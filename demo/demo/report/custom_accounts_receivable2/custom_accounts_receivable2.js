@@ -119,7 +119,22 @@ frappe.query_reports["Custom Accounts Receivable2"] = {
 			fieldtype: "Link",
 			options: "Sales Person",
 		},
-	]	
+		{
+			fieldname: "group_by_customer",
+			label: __("Group By Customer"),
+			fieldtype: "Check",
+			default: 0,
+		},
+	],
+	formatter: function (value, row, column, data, default_formatter) {
+		value = default_formatter(value, row, column, data);
+
+		if (data && data.bold === 1 && column.fieldname !== "bold") {
+			value = `<b>${value}</b>`;
+		}
+
+		return value;
+	},
 };
 
 function get_party_type_options() {

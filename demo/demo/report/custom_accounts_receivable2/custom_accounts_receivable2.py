@@ -202,6 +202,11 @@ def get_data(filters):
 
     calculate_ageing_periods(data, filters)
 
+    if filters.get('group_by_customer'):
+        data = group_data_by_customer(data)
+
+    data = add_total_row(data)
+
     return data
 
 def get_opening_balance(filters):
@@ -300,6 +305,101 @@ def calculate_ageing_periods(data, filters):
         else:
             # Age is greater than last range
             row[f"range_{bucket_count}"] += amount
+
+def group_data_by_customer(data): 
+    grouped_data = []
+
+    grouped_data.append(data[0])
+    
+    party_dict = {}
+    taken_dict = {}
+
+    for row in data:
+        party = row.get('party')
+
+        if not party:
+            continue
+
+        if party not in party_dict:
+            party_dict[party] = []
+
+        party_dict[party].append(row)
+
+    for row in data:
+        party = row.get('party')
+
+        if party in taken_dict:
+            continue
+        taken_dict[party] = True
+
+        total_row = {
+            "bold": 1,
+            "party": party,
+            "invoiced_amount": 0,
+            "paid_amount": 0,
+            "credit_note": 0,
+            "paid_credit_note": 0,
+            "outstanding_amount": 0,
+            "range_0": 0,
+            "range_1": 0,
+            "range_2": 0,
+            "range_3": 0,
+            "range_4": 0,
+        }
+
+        for field in party_dict.get(party, []):
+            grouped_data.append(field)
+
+            total_row['invoiced_amount'] += field.get('invoiced_amount', 0) or 0
+            total_row['paid_amount'] += field.get('paid_amount', 0) or 0
+            total_row['credit_note'] += field.get('credit_note', 0) or 0
+            total_row['paid_credit_note'] += field.get('paid_credit_note', 0) or 0
+            total_row['outstanding_amount'] += field.get('outstanding_amount', 0) or 0
+            total_row['range_0'] += field.get('range_0', 0) or 0
+            total_row['range_1'] += field.get('range_1', 0) or 0
+            total_row['range_2'] += field.get('range_2', 0) or 0
+            total_row['range_3'] += field.get('range_3', 0) or 0
+            total_row['range_4'] += field.get('range_4', 0) or 0
+
+        grouped_data.append(total_row)
+        grouped_data.append({})
+
+    return grouped_data
+
+def add_total_row(data):
+    total_row = {
+        "bold": 1,
+        "party": "Total",
+        "invoiced_amount": 0,
+        "paid_amount": 0,
+        "credit_note": 0,
+        "paid_credit_note": 0,
+        "outstanding_amount": 0,
+        "range_0": 0,
+        "range_1": 0,
+        "range_2": 0,
+        "range_3": 0,
+        "range_4": 0,
+    }
+
+    for field in data:
+        if field.get('bold'):
+            continue
+
+        total_row['invoiced_amount'] += field.get('invoiced_amount', 0) or 0
+        total_row['paid_amount'] += field.get('paid_amount', 0) or 0
+        total_row['credit_note'] += field.get('credit_note', 0) or 0
+        total_row['paid_credit_note'] += field.get('paid_credit_note', 0) or 0
+        total_row['outstanding_amount'] += field.get('outstanding_amount', 0) or 0
+        total_row['range_0'] += field.get('range_0', 0) or 0
+        total_row['range_1'] += field.get('range_1', 0) or 0
+        total_row['range_2'] += field.get('range_2', 0) or 0
+        total_row['range_3'] += field.get('range_3', 0) or 0
+        total_row['range_4'] += field.get('range_4', 0) or 0
+
+    data.append(total_row)
+
+    return data
 
 def get_columns(filters):
     ranges = get_ageing_ranges(filters)
