@@ -160,7 +160,12 @@ def get_data(filters):
 
         # 📘 Handle generic Journal Entries
         else:
-            journal_details = frappe.db.sql("""
+            con = ''
+            if filters.get('party'): 
+                parties = "', '".join(filters.get('party'))
+                con += f" AND party IN ('{parties}')"
+
+            journal_details = frappe.db.sql(f"""
                 SELECT 
                     SUM(debit_in_account_currency) AS debit,
                     SUM(credit_in_account_currency) AS credit,
@@ -170,6 +175,7 @@ def get_data(filters):
                 WHERE
                     jea.parent = %s
                     AND jea.account = %s
+                    {con}
                 GROUP BY jea.account
             """, (voucher_no, entry.get('account')), as_dict=True)
 
