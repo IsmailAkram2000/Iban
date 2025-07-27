@@ -21,6 +21,10 @@ def get_data(filters):
     for row in general_ledger_data:
         if row.get('account') in ["'Opening'", "'افتتاحي'"]:
             data.append({"account": 'Opening', "outstanding_amount": row.get('balance', 0) or 0})
+            break
+
+    for row in general_ledger_data:
+        if row.get('account') in ["'Opening'", "'افتتاحي'"]:
             continue
 
         voucher_type = row.get('voucher_type')
