@@ -20,7 +20,7 @@ def get_data(filters):
 
     voucher_no_dict = {}
 
-    for entry in entries:    
+    for entry in entries:
         voucher_no = entry.get('voucher_no')
 
         if voucher_no in voucher_no_dict:
@@ -33,8 +33,12 @@ def get_data(filters):
                 SELECT 
                     pe.payment_type,
                     pe.paid_amount,
-                    pe.party
+                    pe.party,
+                    per.allocated_amount,
+                    per.reference_doctype,
+                    per.reference_name
                 FROM `tabPayment Entry` pe
+                JOIN `tabPayment Entry Reference` per ON per.parent = pe.name
                 WHERE 
                     pe.name = %s
                     AND pe.docstatus = 1
@@ -42,9 +46,21 @@ def get_data(filters):
             if not payment_details:
                 continue
 
-            paid_amount = payment_details[0].get('paid_amount', 0)
+            paid_amount = 0
 
             customer_group = frappe.get_value('Customer', payment_details[0].get('party', ''), 'customer_group')
+
+            for row in payment_details:
+                reference_doctype = row.get('reference_doctype')
+                reference_name = row.get('reference_name')
+
+                if reference_doctype == 'Sales Invoice':
+                    posting_date = frappe.get_value('Sales Invoice', reference_name, 'posting_date')
+
+                    if str(posting_date) >= str(filters.get('from_date')) and str(posting_date) <= str(filters.get('to_date')):
+                        continue
+
+                    paid_amount += row.get('allocated_amount', 0) or 0
 
             if not paid_amount:
                 continue
@@ -191,6 +207,13 @@ def get_data(filters):
             if filters.get('party_type') == 'Customer' and filters.get('customer_group') and customer_group not in filters.get('customer_group'):
                 continue
 
+            invoiced_amount = debit if debit > 0 else 0
+            paid_amount = credit if credit > 0 else 0
+            outstanding_amount = credit * -1 if credit > 0 else debit
+
+            if credit > 0 and debit > 0:
+                outstanding_amount = debit - credit
+
             data.append({
                 "posting_date": entry.get('posting_date'),
                 "party_type": party_type or entry.get('party_type'),
@@ -198,9 +221,9 @@ def get_data(filters):
                 "account": entry.get('account'),
                 "voucher_type": entry.get('voucher_type'),
                 "voucher_no": entry.get('voucher_no'),
-                "invoiced_amount": debit if debit > 0 else 0,
-                "paid_amount": credit if credit > 0 else 0,
-                "outstanding_amount": credit * -1 if credit > 0 else debit,
+                "invoiced_amount": invoiced_amount,
+                "paid_amount": paid_amount,
+                "outstanding_amount": outstanding_amount,
                 "credit_note": 0,
                 "currency": entry.get('currency'),
                 'customer_group': customer_group,
