@@ -1,10 +1,8 @@
-// Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
-// License: GNU General Public License v3. See license.txt
-
-frappe.provide("erpnext.utils");
+// Copyright (c) 2025, Ismail Akram and contributors
+// For license information, please see license.txt
 
 frappe.query_reports["Custom Accounts Receivable"] = {
-	filters: [
+	"filters": [
 		{
 			fieldname: "company",
 			label: __("Company"),
@@ -14,29 +12,56 @@ frappe.query_reports["Custom Accounts Receivable"] = {
 			default: frappe.defaults.get_user_default("Company"),
 		},
 		{
-			fieldname: "report_date",
-			label: __("Posting Date"),
+			fieldname: "from_date",
+			label: __("From Date"),
+			fieldtype: "Date",
+			default: frappe.datetime.add_months(frappe.datetime.get_today(), -1),
+			reqd: 1,
+		},
+		{
+			fieldname: "to_date",
+			label: __("To Date"),
 			fieldtype: "Date",
 			default: frappe.datetime.get_today(),
+			reqd: 1,
 		},
 		{
-			fieldname: "finance_book",
-			label: __("Finance Book"),
-			fieldtype: "Link",
-			options: "Finance Book",
+			fieldname: "ageing_based_on",
+			label: __("Ageing Based On"),
+			fieldtype: "Select",
+			options: ['Posting Date', 'Due Date'],
+			default: "Due Date",
+			reqd: 1,
 		},
 		{
-			fieldname: "cost_center",
-			label: __("Cost Center"),
+			fieldname: "range",
+			label: __("Ageing Range"),
+			fieldtype: "Data",
+			default: "30, 60, 90, 120",
+		},
+		{
+			fieldname: "voucher_type",
+			label: __("Voucher Type"),
 			fieldtype: "Link",
-			options: "Cost Center",
+			options: "DocType",
 			get_query: () => {
-				var company = frappe.query_report.get_filter_value("company");
 				return {
 					filters: {
-						company: company,
-					},
+						name: ["in", ["Sales Invoice", "Payment Entry", "Journal Entry"]]
+					}
 				};
+			},
+			on_change: function () {
+				frappe.query_report.set_filter_value("voucher_no", "");
+			},
+		},
+		{
+			fieldname: "voucher_no",
+			label: __("Voucher No"),
+			fieldtype: "Link",
+			get_options: function() {
+				const selected_voucher_type = frappe.query_report.get_filter_value("voucher_type");
+				return selected_voucher_type || "";
 			},
 		},
 		{
@@ -46,10 +71,6 @@ frappe.query_reports["Custom Accounts Receivable"] = {
 			options: get_party_type_options(),
 			on_change: function () {
 				frappe.query_report.set_filter_value("party", "");
-				frappe.query_report.toggle_filter_display(
-					"customer_group",
-					frappe.query_report.get_filter_value("party_type") !== "Customer"
-				);
 			},
 		},
 		{
@@ -76,31 +97,11 @@ frappe.query_reports["Custom Accounts Receivable"] = {
 				return {
 					filters: {
 						company: company,
-						account_type: "Receivable",
+						account_type: ["=", "Receivable"],
 						is_group: 0,
 					},
 				};
 			},
-		},
-		{
-			fieldname: "ageing_based_on",
-			label: __("Ageing Based On"),
-			fieldtype: "Select",
-			options: "Posting Date\nDue Date",
-			default: "Due Date",
-		},
-		{
-			fieldname: "calculate_ageing_with",
-			label: __("Calculate Ageing With"),
-			fieldtype: "Select",
-			options: "Report Date\nToday Date",
-			default: "Report Date",
-		},
-		{
-			fieldname: "range",
-			label: __("Ageing Range"),
-			fieldtype: "Data",
-			default: "30, 60, 90, 120",
 		},
 		{
 			fieldname: "customer_group",
@@ -110,95 +111,25 @@ frappe.query_reports["Custom Accounts Receivable"] = {
 			get_data: function (txt) {
 				return frappe.db.get_link_options("Customer Group", txt);
 			},
+			depends_on: "eval:doc.party_type === 'Customer'"
 		},
 		{
-			fieldname: "payment_terms_template",
-			label: __("Payment Terms Template"),
-			fieldtype: "Link",
-			options: "Payment Terms Template",
-		},
-		{
-			fieldname: "sales_partner",
-			label: __("Sales Partner"),
-			fieldtype: "Link",
-			options: "Sales Partner",
-		},
-		{
-			fieldname: "sales_person",
-			label: __("Sales Person"),
-			fieldtype: "Link",
-			options: "Sales Person",
-		},
-		{
-			fieldname: "territory",
-			label: __("Territory"),
-			fieldtype: "Link",
-			options: "Territory",
-		},
-		{
-			fieldname: "group_by_party",
+			fieldname: "group_by_customer",
 			label: __("Group By Customer"),
 			fieldtype: "Check",
-		},
-		{
-			fieldname: "based_on_payment_terms",
-			label: __("Based On Payment Terms"),
-			fieldtype: "Check",
-		},
-		{
-			fieldname: "show_future_payments",
-			label: __("Show Future Payments"),
-			fieldtype: "Check",
-		},
-		{
-			fieldname: "show_delivery_notes",
-			label: __("Show Linked Delivery Notes"),
-			fieldtype: "Check",
-		},
-		{
-			fieldname: "show_sales_person",
-			label: __("Show Sales Person"),
-			fieldtype: "Check",
-		},
-		{
-			fieldname: "show_remarks",
-			label: __("Show Remarks"),
-			fieldtype: "Check",
-		},
-		{
-			fieldname: "for_revaluation_journals",
-			label: __("Revaluation Journals"),
-			fieldtype: "Check",
-		},
-		{
-			fieldname: "ignore_accounts",
-			label: __("Group by Voucher"),
-			fieldtype: "Check",
-		},
-		{
-			fieldname: "in_party_currency",
-			label: __("In Party Currency"),
-			fieldtype: "Check",
+			default: 0,
 		},
 	],
-
 	formatter: function (value, row, column, data, default_formatter) {
 		value = default_formatter(value, row, column, data);
-		if (data && data.bold) {
-			value = value.bold();
+
+		if (data && data.bold === 1 && column.fieldname !== "bold") {
+			value = `<b>${value}</b>`;
 		}
+
 		return value;
 	},
-
-	onload: function (report) {
-		report.page.add_inner_button(__("Accounts Receivable Summary"), function () {
-			var filters = report.get_values();
-			frappe.set_route("query-report", "Accounts Receivable Summary", { company: filters.company });
-		});
-	},
 };
-
-erpnext.utils.add_dimensions("Custom Accounts Receivable", 9);
 
 function get_party_type_options() {
 	let options = [];
