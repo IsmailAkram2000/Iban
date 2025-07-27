@@ -30,7 +30,7 @@ def get_data(filters):
             continue
 
         customer_group = frappe.get_value('Customer', row.get('party'), 'customer_group') if row.get('party') else ''
-        if filters.get('customer_group') and filters.get('customer_group') != customer_group:
+        if filters.get('customer_group') and customer_group not in filters.get('customer_group'):
             continue
 
 
