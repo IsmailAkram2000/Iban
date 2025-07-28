@@ -147,6 +147,9 @@ def add_and_filter_data_by_sales_person(data, filters):
     sales_persons = filters.get('sales_person')
 
     filtered_data = []
+    if data and len(data):
+        filtered_data.append(data[0])
+
     for row in data:
         voucher_type = row.get('voucher_type')
         voucher_no = row.get('voucher_no')
@@ -154,9 +157,9 @@ def add_and_filter_data_by_sales_person(data, filters):
         sales_person = None
         if voucher_type == 'Sales Invoice':
             sales_person = frappe.get_value('Sales Invoice', voucher_no, 'sales_person')
-        if voucher_type == 'Payment Entry':
+        elif voucher_type == 'Payment Entry':
             sales_person = frappe.get_value('Payment Entry', voucher_no, 'sales_person')
-        if voucher_type == 'Journal Entry':
+        elif voucher_type == 'Journal Entry':
             je_sales_persons = frappe.db.sql("""
                 SELECT sales_person
                 FROM `tabJournal Entry Account`
@@ -166,6 +169,8 @@ def add_and_filter_data_by_sales_person(data, filters):
                 if je_sales_person.get('sales_person'):
                     sales_person = je_sales_person.get('sales_person')
                     break
+        else:
+            continue
 
         row['sales_person'] = sales_person
             
