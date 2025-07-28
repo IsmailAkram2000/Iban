@@ -76,7 +76,7 @@ def get_general_ledger_data(filters):
         'account': accounts, 
         'party_type': filters.get('party_type'),
         'party': filters.get('party'),
-        'sales_person': [filters.get('sales_person')] if filters.get('sales_person') else []
+        'sales_person': [filters.get('sales_person')] if filters.get('sales_person') else [],
         'categorize_by': 'Categorize by Voucher (Consolidated)', 
         'include_dimensions': 1, 
         'include_default_book_entries': 1
